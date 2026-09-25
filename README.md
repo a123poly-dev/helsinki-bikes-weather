@@ -59,3 +59,12 @@ Rows below are kept, not removed:
 - `duration_mismatch`: Duration differs from Return − Departure by more
   than 60 sec (5,346 trips).
 - `over_limit`: trip longer than 1 hour (free time limit).
+
+## How to run
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python pipeline.py
+```
+Output: `data/bikes.db` with tables `trips`, `stations`, `weather`.
