@@ -1,8 +1,16 @@
+import sqlite3
+
 import pandas as pd
 
 TRIPS_FILE = "data/2025-06.csv"
 WEATHER_FILE = "data/weather-2025-06.csv"
+STATIONS_FILE = "data/stations.csv"
+DB_FILE = "data/bikes.db"
 
+
+def normalize(s):
+    """Replace non-breaking spaces and trim whitespace."""
+    return s.str.replace("\xa0", " ").str.strip()
 
 def extract_trips(path):
     """Read raw trips from CSV."""
@@ -24,6 +32,12 @@ def clean_trips(df):
     df["Return"] = pd.to_datetime(df["Return"], format=fmt, errors="coerce")
     df["departure_fixed"] = date_only
     print(f"  departure without time (set to 00:00:00): {date_only.sum()}")
+
+    # Station names: remove non-breaking spaces
+    for col in ["Departure station name", "Return station name"]:
+        n = df[col].str.contains("\xa0").sum()
+        df[col] = normalize(df[col])
+        print(f"  {col}: \\xa0 fixed in {n} rows")
 
     rules = {
         "invalid date": df["Departure"].isna() | df["Return"].isna(),
@@ -83,6 +97,65 @@ def clean_weather(df):
 
     return df[["date", "precipitation_mm", "temp_avg_c", "temp_max_c", "is_rainy"]]
 
+def extract_stations(path):
+    """Read stations from CSV."""
+    return pd.read_csv(path)
+
+def build_stations(trips, ref):
+    """Station list from trips, enriched from the reference
+    only where both ID and name match."""
+    dep = trips[["Departure station id", "Departure station name"]]
+    dep.columns = ["station_id", "station_name"]
+    ret = trips[["Return station id", "Return station name"]]
+    ret.columns = ["station_id", "station_name"]
+    st = pd.concat([dep, ret]).drop_duplicates("station_id").copy()
+    st["station_id"] = pd.to_numeric(st["station_id"], errors="coerce")
+
+    ref = ref.rename(columns={
+        "ID": "station_id", "Nimi": "ref_name", "Kaupunki": "city",
+        "Kapasiteet": "capacity", "x": "lon", "y": "lat",
+    })
+    ref["ref_name"] = normalize(ref["ref_name"])
+    ref["city"] = ref["city"].str.strip().replace("", "Helsinki")
+
+    st = st.merge(ref[["station_id", "ref_name", "city", "capacity", "lon", "lat"]],
+                  on="station_id", how="left")
+
+    # Accept reference data only if names match (reference names can be truncated)
+    st["verified"] = [
+        isinstance(r, str) and (t == r or t.startswith(r))
+        for t, r in zip(st["station_name"], st["ref_name"])
+    ]
+    st.loc[~st["verified"], ["city", "capacity", "lon", "lat"]] = None
+
+    print(f"  stations: {len(st)}, verified: {st['verified'].sum()}")
+    return st.drop(columns="ref_name")
+
+def load_to_sqlite(trips, weather, stations, db_path):
+    """Load all tables into SQLite. Safe to re-run."""
+    trips = trips.rename(columns={
+        "Departure": "departure",
+        "Return": "return_time",
+        "Departure station id": "departure_station_id",
+        "Return station id": "return_station_id",
+        "Covered distance (m)": "distance_m",
+        "Duration (sec.)": "duration_sec",
+    })
+    for col in ["departure_station_id", "return_station_id"]:
+        trips[col] = pd.to_numeric(trips[col], errors="coerce")
+    trips["trip_date"] = trips["departure"].dt.date
+    trips = trips.drop(columns=["Departure station name", "Return station name"])
+
+    conn = sqlite3.connect(db_path)
+    trips.to_sql("trips", conn, if_exists="replace", index=False)
+    stations.to_sql("stations", conn, if_exists="replace", index=False)
+    weather.to_sql("weather", conn, if_exists="replace", index=False)
+
+    for table in ["trips", "stations", "weather"]:
+        n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        print(f"  {table}: {n} rows")
+    conn.close()
+
 
 def main():
     print("Extract trips...")
@@ -96,10 +169,17 @@ def main():
 
     print("Clean weather...")
     weather = clean_weather(weather)
-    print(weather.head())
 
-    # Next steps: load_to_sqlite()
+    print("Extract stations...")
+    ref = extract_stations(STATIONS_FILE)
 
+    print("Build stations...")
+    stations = build_stations(trips, ref)
+
+    print("Load to SQLite...")
+    load_to_sqlite(trips, weather, stations, DB_FILE)
+   
+# Next steps: load_to_sqlite()
 
 if __name__ == "__main__":
     main()
