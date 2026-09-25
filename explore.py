@@ -56,3 +56,10 @@ ret = pd.to_datetime(df["Return"], format=fmt, errors="coerce")
 diff = (dep - (ret - pd.to_timedelta(df["Duration (sec.)"], unit="s"))).dt.total_seconds()
 print(diff.describe())
 print("Within 10 sec:", (diff.abs() <= 10).mean())
+
+import pandas as pd
+
+w = pd.read_csv("data/weather-2025-06.csv")
+print(w.head())
+print(w.dtypes)
+print(w.isna().sum())
