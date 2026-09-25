@@ -1,13 +1,15 @@
 # helsinki-bikes-weather
 How does weather influence the number of city bike rides in Helsinki?
 
- ## Type of data:
-   
-1.1. The Origin–Destination (OD) data of city bike stations includes all journeys made by city bikes in Helsinki and Espoo. The data includes        information about the origin and destination station, start and end times, distance (in meters) and duration (in seconds) of each journey.
+## Data sources
+- City bike trips: HSL open data (Helsinki Region Transport)
+(The Origin–Destination (OD) data of city bike stations includes all journeys made by city bikes in Helsinki and Espoo. The data includes information about the origin and destination station, start and end times, distance (in meters) and duration (in seconds) of each journey.)
 Data period: June 2025.
+- Weather: Finnish Meteorological Institute (FMI) open data,
+  station Helsinki Kaisaniemi, daily observations
    
-## Data exploration (June 2025)
-   
+## Data exploration
+   ### Trips (HSL city bikes, June 2025)
 - 387,257 trips, 8 columns, no missing values
 - Departure/Return stored as text → convert to datetime
 - Outliers: negative distances (min −4,294 km, likely an overflow bug),
@@ -20,6 +22,13 @@ Data period: June 2025.
 - Duration is on average ~4 sec shorter than Return − Departure.
 - 3.3% of trips have a larger mismatch (up to 25 days) → flagged,
   not removed (`duration_mismatch`).
+
+### Weather (FMI, Helsinki Kaisaniemi, June 2025)
+- 30 daily rows, no missing values, no gaps in dates
+- Date is split into Year / Month / Day → combined into one `date` column
+- Precipitation uses FMI code −1 for "no precipitation" → converted to 0
+- Rainy day = precipitation ≥ 1 mm (14 of 30 days)
+  
 
 ## Cleaning rules
 

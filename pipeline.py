@@ -1,6 +1,7 @@
 import pandas as pd
 
 TRIPS_FILE = "data/2025-06.csv"
+WEATHER_FILE = "data/weather-2025-06.csv"
 
 
 def extract_trips(path):
@@ -53,6 +54,36 @@ def clean_trips(df):
     return df
 
 
+def extract_weather(path):
+    """Read daily weather observations from FMI CSV."""
+    return pd.read_csv(path)
+
+
+def clean_weather(df):
+    """Build date column, fix FMI codes, rename columns."""
+    df["date"] = pd.to_datetime(df[["Year", "Month", "Day"]]).dt.date
+
+    df = df.rename(columns={
+        "Precipitation amount [mm]": "precipitation_mm",
+        "Average temperature [°C]": "temp_avg_c",
+        "Maximum temperature [°C]": "temp_max_c",
+    })
+
+    # FMI: -1 means no precipitation
+    no_rain = df["precipitation_mm"] == -1
+    df.loc[no_rain, "precipitation_mm"] = 0
+    print(f"  precipitation -1 → 0: {no_rain.sum()}")
+
+    # Rainy day: at least 1 mm
+    df["is_rainy"] = df["precipitation_mm"] >= 1
+
+    # Checks: one row per day, no gaps
+    assert df["date"].is_unique, "Duplicate dates in weather data"
+    print(f"  days: {len(df)}, rainy: {df['is_rainy'].sum()}")
+
+    return df[["date", "precipitation_mm", "temp_avg_c", "temp_max_c", "is_rainy"]]
+
+
 def main():
     print("Extract trips...")
     trips = extract_trips(TRIPS_FILE)
@@ -60,8 +91,14 @@ def main():
     print("Clean trips...")
     trips = clean_trips(trips)
 
-    print(trips.dtypes)
-    # Next steps: extract_weather(), load_to_sqlite()
+    print("Extract weather...")
+    weather = extract_weather(WEATHER_FILE)
+
+    print("Clean weather...")
+    weather = clean_weather(weather)
+    print(weather.head())
+
+    # Next steps: load_to_sqlite()
 
 
 if __name__ == "__main__":
