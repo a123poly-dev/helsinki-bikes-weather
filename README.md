@@ -22,6 +22,9 @@ Data period: June 2025.
 - Duration is on average ~4 sec shorter than Return − Departure.
 - 3.3% of trips have a larger mismatch (up to 25 days) → flagged,
   not removed (`duration_mismatch`).
+- Station IDs are text codes, not numbers: most have leading zeros ("044"),
+  one return station uses "*40" (" Puotila", 1,378 trips). IDs are stored
+  as text; Converted to numbers only to match the reference list.
 
 ### Weather (FMI, Helsinki Kaisaniemi, June 2025)
 - 30 daily rows, no missing values, no gaps in dates

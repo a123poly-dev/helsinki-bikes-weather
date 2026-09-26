@@ -103,23 +103,25 @@ def extract_stations(path):
 
 def build_stations(trips, ref):
     """Station list from trips, enriched from the reference
-    only where both ID and name match."""
+    only where both ID and name match. IDs are kept as text codes."""
     dep = trips[["Departure station id", "Departure station name"]]
     dep.columns = ["station_id", "station_name"]
     ret = trips[["Return station id", "Return station name"]]
     ret.columns = ["station_id", "station_name"]
     st = pd.concat([dep, ret]).drop_duplicates("station_id").copy()
-    st["station_id"] = pd.to_numeric(st["station_id"], errors="coerce")
+
+    # Numeric version only for matching with the reference ('044' -> 44)
+    st["id_num"] = pd.to_numeric(st["station_id"], errors="coerce")
 
     ref = ref.rename(columns={
-        "ID": "station_id", "Nimi": "ref_name", "Kaupunki": "city",
+        "ID": "ref_id", "Nimi": "ref_name", "Kaupunki": "city",
         "Kapasiteet": "capacity", "x": "lon", "y": "lat",
     })
     ref["ref_name"] = normalize(ref["ref_name"])
     ref["city"] = ref["city"].str.strip().replace("", "Helsinki")
 
-    st = st.merge(ref[["station_id", "ref_name", "city", "capacity", "lon", "lat"]],
-                  on="station_id", how="left")
+    st = st.merge(ref[["ref_id", "ref_name", "city", "capacity", "lon", "lat"]],
+                  left_on="id_num", right_on="ref_id", how="left")
 
     # Accept reference data only if names match (reference names can be truncated)
     st["verified"] = [
@@ -129,7 +131,8 @@ def build_stations(trips, ref):
     st.loc[~st["verified"], ["city", "capacity", "lon", "lat"]] = None
 
     print(f"  stations: {len(st)}, verified: {st['verified'].sum()}")
-    return st.drop(columns="ref_name")
+    return st.drop(columns=["id_num", "ref_id", "ref_name"])
+
 
 def load_to_sqlite(trips, weather, stations, db_path):
     """Load all tables into SQLite. Safe to re-run."""
@@ -141,8 +144,7 @@ def load_to_sqlite(trips, weather, stations, db_path):
         "Covered distance (m)": "distance_m",
         "Duration (sec.)": "duration_sec",
     })
-    for col in ["departure_station_id", "return_station_id"]:
-        trips[col] = pd.to_numeric(trips[col], errors="coerce")
+
     trips["trip_date"] = trips["departure"].dt.date
     trips = trips.drop(columns=["Departure station name", "Return station name"])
 
