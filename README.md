@@ -71,3 +71,29 @@ pip install -r requirements.txt
 python pipeline.py
 ```
 Output: `data/bikes.db` with tables `trips`, `stations`, `weather`.
+
+
+## Results (June 2025)
+
+Average trips per day, rainy (≥ 1 mm) vs dry:
+
+| Day type | Dry    | Rainy  | Effect | Days (dry / rainy) |
+|----------|--------|--------|--------|--------------------|
+| Weekday  | 15,806 | 10,796 | −32%   | 9 / 11             |
+| Weekend  | 14,333 | 10,521 | −27%   | 5 / 2              |
+
+- Rain reduces bike trips by about one third.
+- Midsummer (20–22 June) is excluded: even dry days had ~40% fewer trips.
+- Limitation: one month, few rainy weekends — results are indicative.
+
+Weekdays by rain intensity:
+
+| Rain            | Days | Trips/day | Effect |
+|-----------------|------|-----------|--------|
+| Dry (< 1 mm)    | 9    | 15,806    | —      |
+| Light (1–5 mm)  | 6    | 12,397    | −22%   |
+| Heavy (> 5 mm)  | 5    | 8,874     | −44%   |
+
+- The effect grows with rain intensity: heavy rain cuts trips twice as much as light rain.
+- Exception: Mon 16 June (3.2 mm) had a normal number of trips — rain timing
+  matters (e.g. night rain). Hourly weather data would be needed to check this.
