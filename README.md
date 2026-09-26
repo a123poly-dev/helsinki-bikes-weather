@@ -75,7 +75,7 @@ Output: `data/bikes.db` with tables `trips`, `stations`, `weather`.
 
 ## Results (June 2025)
 
-Average trips per day, rainy (≥ 1 mm) vs dry:
+### Average trips per day, rainy (≥ 1 mm) vs dry:
 
 | Day type | Dry    | Rainy  | Effect | Days (dry / rainy) |
 |----------|--------|--------|--------|--------------------|
@@ -86,7 +86,8 @@ Average trips per day, rainy (≥ 1 mm) vs dry:
 - Midsummer (20–22 June) is excluded: even dry days had ~40% fewer trips.
 - Limitation: one month, few rainy weekends — results are indicative.
 
-Weekdays by rain intensity:
+
+### Weekdays by rain intensity:
 
 | Rain            | Days | Trips/day | Effect |
 |-----------------|------|-----------|--------|
@@ -97,3 +98,14 @@ Weekdays by rain intensity:
 - The effect grows with rain intensity: heavy rain cuts trips twice as much as light rain.
 - Exception: Mon 16 June (3.2 mm) had a normal number of trips — rain timing
   matters (e.g. night rain). Hourly weather data would be needed to check this.
+
+
+### Trips per hour (average per day, Midsummer excluded):
+
+- Weekdays: two commute peaks — 8:00 (~930 trips) and 16–17 (~1,320).
+  The evening peak is 1.4× higher than the morning one.
+- Weekends: a wide plateau from 14 to 18 (~1,050–1,120 trips per hour).
+- Nights after Friday and Saturday: 3–5× more trips at 00–03 than on weekdays.
+- After 18:00 weekdays and weekends look almost the same.
+- Commute peaks match Finnish working hours, which confirms timestamps
+  are in local time.

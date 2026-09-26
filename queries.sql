@@ -67,3 +67,32 @@ SELECT
 FROM daily
 GROUP BY rain
 ORDER BY rain;
+
+-- Q3. Average trips per hour: weekdays vs weekends
+-- Midsummer (20–22 June) excluded.
+-- Divided by the number of days of each type, so groups are comparable.
+WITH trips_typed AS (
+    SELECT
+        strftime('%H', departure) AS hour,
+        trip_date,
+        CASE
+            WHEN strftime('%w', trip_date) IN ('0', '6') THEN 'weekend'
+            ELSE 'weekday'
+        END AS day_type
+    FROM trips
+    WHERE trip_date NOT BETWEEN '2025-06-20' AND '2025-06-22'
+),
+days AS (
+    SELECT day_type, COUNT(DISTINCT trip_date) AS n_days
+    FROM trips_typed
+    GROUP BY day_type
+)
+SELECT
+    hour,
+    ROUND(SUM(day_type = 'weekday') * 1.0
+          / (SELECT n_days FROM days WHERE day_type = 'weekday')) AS weekday_avg,
+    ROUND(SUM(day_type = 'weekend') * 1.0
+          / (SELECT n_days FROM days WHERE day_type = 'weekend')) AS weekend_avg
+FROM trips_typed
+GROUP BY hour
+ORDER BY hour;
