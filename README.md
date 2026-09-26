@@ -31,15 +31,14 @@ Data period: June 2025.
 - Date is split into Year / Month / Day → combined into one `date` column
 - Precipitation uses FMI code −1 for "no precipitation" → converted to 0
 - Rainy day = precipitation ≥ 1 mm (14 of 30 days)
+- Weather is taken from one station in central Helsinki (Kaisaniemi).
+  11.2% of trips start in Espoo; local weather differences are ignored.
   
 ### Station reference (HSL station list)
-- The station list is from April 2021, while trips are from June 2025.
-  This ~4-year gap explains the mismatches below: new stations are missing,
-  and some IDs were reused for different stations. 
-- 13 of 456 stations are new or have reused IDs (not in the 2021 list).
-  Their city was filled manually from the HSL app and the trip data
-  (`reference/stations_manual.csv`; column `city_source` = reference / manual).
-  Two stations (*40 Puotila, 768 Kurkijoentie) are not in the app, their city was estimated from the map.
+- The station list is from April 2021, trips are from June 2025. 13 stations
+  were missing or had reused IDs; their city was filled manually from the
+  HSL app (`reference/stations_manual.csv`).
+- City share of trips: Helsinki 88.8%, Espoo 11.2%.
 - Empty city field = Helsinki (347 stations), Espoo = 110
 - Station IDs match between trips and the reference for 443 of 456 stations.
   7 IDs point to different stations (IDs were reused after renaming),
@@ -48,7 +47,7 @@ Data period: June 2025.
   (ignoring whitespace and truncated names in the reference).
 - One station name ("Vallilan varikko") contains a non-breaking space (\xa0)
   in the trip data (1,619 trips). Names are normalized in the pipeline.
-- City share of trips: Helsinki 87.7%, Espoo 10.6%, unverified 1.6%.
+
 
 ## Cleaning rules
 
