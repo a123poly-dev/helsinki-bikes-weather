@@ -158,4 +158,6 @@ for col in ["Departure station id", "Return station id"]:
     bad = ids[pd.to_numeric(ids, errors="coerce").isna()]
     print(col, bad.value_counts().to_dict())
 
-    
+# 4.9. Unverified stations: do they exist in the reference under another ID?
+names = "Urhea|Korppaantie|Kössi Koskisen"
+print(stations.loc[stations["Nimi"].str.contains(names), ["ID", "Nimi", "Kaupunki"]])    
