@@ -96,3 +96,74 @@ SELECT
 FROM trips_typed
 GROUP BY hour
 ORDER BY hour;
+
+
+-- Q4. Top 10 departure stations: rank and share of all trips
+WITH station_trips AS (
+    SELECT
+        s.station_name,
+        COALESCE(s.city, 'unknown') AS city,
+        COUNT(*) AS trips
+    FROM trips t
+    JOIN stations s ON t.departure_station_id = s.station_id
+    GROUP BY s.station_id
+),
+ranked AS (
+    SELECT
+        station_name,
+        city,
+        trips,
+        RANK() OVER (ORDER BY trips DESC) AS rank,
+        ROUND(100.0 * trips / SUM(trips) OVER (), 2) AS share_pct
+    FROM station_trips
+)
+SELECT rank, station_name, city, trips, share_pct
+FROM ranked
+WHERE rank <= 10
+ORDER BY rank;
+
+
+-- Q4b. Top 3 stations in each city
+WITH station_trips AS (
+    SELECT
+        s.station_name,
+        COALESCE(s.city, 'unknown') AS city,
+        COUNT(*) AS trips
+    FROM trips t
+    JOIN stations s ON t.departure_station_id = s.station_id
+    GROUP BY s.station_id
+),
+ranked AS (
+    SELECT
+        city,
+        station_name,
+        trips,
+        RANK() OVER (PARTITION BY city ORDER BY trips DESC) AS rank_in_city
+    FROM station_trips
+)
+SELECT city, rank_in_city, station_name, trips
+FROM ranked
+WHERE rank_in_city <= 3
+  AND city <> 'unverified'
+ORDER BY city, rank_in_city;
+
+
+-- Q5. Trips per day with a 7-day moving average
+-- The average is shown only when the window has a full 7 days.
+WITH daily AS (
+    SELECT trip_date, COUNT(*) AS trips
+    FROM trips
+    GROUP BY trip_date
+)
+SELECT
+    d.trip_date,
+    d.trips,
+    w.precipitation_mm,
+    CASE
+        WHEN COUNT(*) OVER last7 = 7
+        THEN ROUND(AVG(d.trips) OVER last7)
+    END AS avg_7d
+FROM daily d
+JOIN weather w ON d.trip_date = w.date
+WINDOW last7 AS (ORDER BY d.trip_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)
+ORDER BY d.trip_date;

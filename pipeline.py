@@ -6,6 +6,7 @@ TRIPS_FILE = "data/2025-06.csv"
 WEATHER_FILE = "data/weather-2025-06.csv"
 STATIONS_FILE = "data/stations.csv"
 DB_FILE = "data/bikes.db"
+MANUAL_STATIONS_FILE = "reference/stations_manual.csv"
 
 
 def normalize(s):
@@ -41,6 +42,7 @@ def clean_trips(df):
 
     rules = {
         "invalid date": df["Departure"].isna() | df["Return"].isna(),
+        "returned to workshop (997)": df["Return station id"] == "997",
         "distance <= 0": df["Covered distance (m)"] <= 0,
         "distance > 50 km": df["Covered distance (m)"] > 50_000,
         "duration < 60 sec": df["Duration (sec.)"] < 60,
@@ -101,7 +103,7 @@ def extract_stations(path):
     """Read stations from CSV."""
     return pd.read_csv(path)
 
-def build_stations(trips, ref):
+def build_stations(trips, ref, manual):
     """Station list from trips, enriched from the reference
     only where both ID and name match. IDs are kept as text codes."""
     dep = trips[["Departure station id", "Departure station name"]]
@@ -129,6 +131,18 @@ def build_stations(trips, ref):
         for t, r in zip(st["station_name"], st["ref_name"])
     ]
     st.loc[~st["verified"], ["city", "capacity", "lon", "lat"]] = None
+
+    # Manual fixes for stations missing or outdated in the 2021 reference
+    manual = manual.rename(columns={"city": "manual_city"})
+    st = st.merge(manual[["station_id", "manual_city"]], on="station_id", how="left")
+    fill = ~st["verified"] & st["manual_city"].notna()
+    st.loc[fill, "city"] = st.loc[fill, "manual_city"]
+
+    st["city_source"] = None
+    st.loc[st["verified"], "city_source"] = "reference"
+    st.loc[fill, "city_source"] = "manual"
+    st = st.drop(columns="manual_city")
+    print(f"  city filled manually: {fill.sum()}")
 
     print(f"  stations: {len(st)}, verified: {st['verified'].sum()}")
     return st.drop(columns=["id_num", "ref_id", "ref_name"])
@@ -176,7 +190,8 @@ def main():
     ref = extract_stations(STATIONS_FILE)
 
     print("Build stations...")
-    stations = build_stations(trips, ref)
+    manual = pd.read_csv(MANUAL_STATIONS_FILE, dtype={"station_id": str})
+    stations = build_stations(trips, ref, manual)
 
     print("Load to SQLite...")
     load_to_sqlite(trips, weather, stations, DB_FILE)

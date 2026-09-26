@@ -33,6 +33,13 @@ Data period: June 2025.
 - Rainy day = precipitation ≥ 1 mm (14 of 30 days)
   
 ### Station reference (HSL station list)
+- The station list is from April 2021, while trips are from June 2025.
+  This ~4-year gap explains the mismatches below: new stations are missing,
+  and some IDs were reused for different stations. 
+- 13 of 456 stations are new or have reused IDs (not in the 2021 list).
+  Their city was filled manually from the HSL app and the trip data
+  (`reference/stations_manual.csv`; column `city_source` = reference / manual).
+  Two stations (*40 Puotila, 768 Kurkijoentie) are not in the app, their city was estimated from the map.
 - Empty city field = Helsinki (347 stations), Espoo = 110
 - Station IDs match between trips and the reference for 443 of 456 stations.
   7 IDs point to different stations (IDs were reused after renaming),
@@ -50,6 +57,9 @@ Removed 2.7% of trips (June 2025):
 - distance ≤ 0 m or > 50 km (sensor errors)
 - duration < 60 sec (false starts: bike taken and returned immediately)
 - duration > 5 h (likely not returned in time)
+- return to "Workshop Helsinki" (ID 997, 24 trips): the bike was not returned
+  to a station; the return time and place are when HSL collected it
+  (durations from ~22 hours to 24 days)
 
 Rules overlap: most zero-distance trips are also shorter than 60 sec —
 consistent with "false starts".
