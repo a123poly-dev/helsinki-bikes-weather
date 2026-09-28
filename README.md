@@ -19,6 +19,7 @@ How does weather influence the number of city bike rides in Helsinki?
 - `explore.py` — data exploration and quality checks
 - `reference/stations_manual.csv` — manual fixes for stations missing in the 2021 list
 - `reference/holidays.csv` — holidays excluded from regular day comparisons
+- `tests/test_pipeline.py` — unit tests for cleaning rules and station validation
 
 Rain thresholds (1 mm, 5 mm) are defined once in `pipeline.py`.
 
@@ -34,6 +35,7 @@ sqlite3 data/bikes.db < queries.sql
 ```
 Output: `data/bikes.db` with tables `trips`, `stations`, `weather`.
 python analysis.py
+python -m pytest
 
 ## Data exploration
 
@@ -115,6 +117,7 @@ Rows below are kept, not removed:
 ### Weekdays by rain intensity
 
 ![Weekday trips by rain intensity](images/rain_intensity.png)
+Each dot is one weekday; the bar is the average.
 
 | Rain            | Days | Trips/day | Effect |
 |-----------------|------|-----------|--------|
