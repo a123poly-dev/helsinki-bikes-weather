@@ -8,23 +8,33 @@ import matplotlib.dates as mdates
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from matplotlib.ticker import FuncFormatter
+import numpy as np
 import pandas as pd
 
-DB_FILE = "data/bikes.db"
+from pipeline import DB_FILE, RAIN_THRESHOLD_MM, HEAVY_RAIN_MM
+
 OUT_DIR = "images"
 
 # Colors (validated reference palette: slot 1 blue, slot 2 orange)
 BLUE = "#2a78d6"
+LIGHT_BLUE = "#b7d3f6"  # same hue, light step: averages behind the dots
 ORANGE = "#eb6834"
-GRAY = "#c9c7bf"       # neutral bars (context)
+GRAY = "#c9c7bf"        # neutral bars (context)
+HOLIDAY_BG = "#f0efec"
 TEXT = "#0b0b0b"
 TEXT_2 = "#52514e"
 GRID = "#e4e2dc"
 SURFACE = "#fcfcfb"
 
-HOLIDAY_START, HOLIDAY_END = "2025-06-20", "2025-06-22"
-
 thousands = FuncFormatter(lambda x, _: f"{x:,.0f}")
+
+
+def period_label(dates):
+    """'June 2025' for one month, 'Jun 2025 – Aug 2025' for several."""
+    start, end = dates.min(), dates.max()
+    if (start.year, start.month) == (end.year, end.month):
+        return start.strftime("%B %Y")
+    return f"{start:%b %Y} – {end:%b %Y}"
 
 
 def style(ax, title, subtitle):
@@ -49,74 +59,70 @@ def save(fig, name):
 
 
 def chart_rain_intensity(conn):
-    """Q2: weekday trips by rain intensity."""
-    df = pd.read_sql(f"""
-        WITH daily AS (
-            SELECT t.trip_date, COUNT(*) AS trips, w.precipitation_mm
-            FROM trips t
-            JOIN weather w ON t.trip_date = w.date
-            WHERE strftime('%w', t.trip_date) NOT IN ('0', '6')
-              AND t.trip_date NOT BETWEEN '{HOLIDAY_START}' AND '{HOLIDAY_END}'
-            GROUP BY t.trip_date
-        )
-        SELECT
-            CASE
-                WHEN precipitation_mm < 1 THEN 1
-                WHEN precipitation_mm <= 5 THEN 2
-                ELSE 3
-            END AS bucket,
-            COUNT(*) AS days,
-            AVG(trips) AS avg_trips
-        FROM daily
-        GROUP BY bucket
-        ORDER BY bucket
-    """, conn)
+    """Weekday trips by rain level: every day as a dot, the average as a bar."""
+    df = pd.read_sql(
+        "SELECT trip_date, trips, rain_level FROM daily_trips WHERE day_type = ?",
+        conn, params=("weekday",), parse_dates=["trip_date"],
+    )
+    levels = ["dry", "light", "heavy"]
+    names = {
+        "dry": f"Dry\n< {RAIN_THRESHOLD_MM:g} mm",
+        "light": f"Light rain\n{RAIN_THRESHOLD_MM:g}–{HEAVY_RAIN_MM:g} mm",
+        "heavy": f"Heavy rain\n> {HEAVY_RAIN_MM:g} mm",
+    }
+    stats = df.groupby("rain_level")["trips"].agg(["mean", "count", "max"]).reindex(levels)
+    base = stats.loc["dry", "mean"]
+    top = df["trips"].max()
 
-    names = {1: "Dry\n< 1 mm", 2: "Light rain\n1–5 mm", 3: "Heavy rain\n> 5 mm"}
-    labels = [f"{names[b]}\n{d} days" for b, d in zip(df["bucket"], df["days"])]
-    base = df["avg_trips"].iloc[0]
+    fig, ax = plt.subplots(figsize=(7, 4.8), facecolor=SURFACE)
+    ax.bar(range(3), stats["mean"], color=LIGHT_BLUE, width=0.55, zorder=1)
+    for i, level in enumerate(levels):
+        values = df.loc[df["rain_level"] == level].sort_values("trip_date")["trips"]
+        jitter = np.linspace(-0.15, 0.15, len(values)) if len(values) > 1 else [0]
+        ax.scatter(i + np.asarray(jitter), values, s=40, color=BLUE,
+                   edgecolor=SURFACE, linewidth=1.5, zorder=3)
 
-    fig, ax = plt.subplots(figsize=(7, 4.5), facecolor=SURFACE)
-    bars = ax.bar(labels, df["avg_trips"], color=BLUE, width=0.55)
-    for bar, value in zip(bars, df["avg_trips"]):
-        effect = "" if value == base else f"  (−{(base - value) / base:.0%})"
-        ax.text(bar.get_x() + bar.get_width() / 2, value + base * 0.02,
-                f"{value:,.0f}{effect}", ha="center", va="bottom",
+        mean = stats.loc[level, "mean"]
+        effect = "" if level == "dry" else f"  (−{(base - mean) / base:.0%})"
+        label_y = max(mean, stats.loc[level, "max"]) + top * 0.03
+        ax.text(i, label_y, f"avg {mean:,.0f}{effect}", ha="center", va="bottom",
                 fontsize=10, color=TEXT)
-    ax.set_ylim(0, base * 1.15)
+
+    ax.set_xticks(range(3))
+    ax.set_xticklabels([f"{names[l]}\n{int(stats.loc[l, 'count'])} days" for l in levels])
+    ax.set_ylim(0, top * 1.2)
+    ax.legend(
+        handles=[Patch(color=LIGHT_BLUE, label="Average"),
+                 Line2D([0], [0], marker="o", color="none", markerfacecolor=BLUE,
+                        markeredgecolor=SURFACE, markersize=8, label="One weekday")],
+        frameon=False, loc="upper right", ncol=2, fontsize=10, labelcolor=TEXT,
+    )
     style(ax, "Weekday trips drop as rain gets heavier",
-          "Average trips per weekday, June 2025 (Midsummer excluded)")
+          f"Trips per weekday, {period_label(df['trip_date'])} (holidays excluded)")
     save(fig, "rain_intensity.png")
 
 
 def chart_hourly(conn):
-    """Q3: average trips per hour, weekdays vs weekends."""
-    df = pd.read_sql(f"""
-        WITH trips_typed AS (
-            SELECT
-                CAST(strftime('%H', departure) AS INTEGER) AS hour,
-                trip_date,
-                CASE WHEN strftime('%w', trip_date) IN ('0', '6')
-                     THEN 'weekend' ELSE 'weekday' END AS day_type
-            FROM trips
-            WHERE trip_date NOT BETWEEN '{HOLIDAY_START}' AND '{HOLIDAY_END}'
-        ),
-        days AS (
-            SELECT day_type, COUNT(DISTINCT trip_date) AS n_days
-            FROM trips_typed GROUP BY day_type
+    """Average trips per hour: weekdays vs weekends."""
+    df = pd.read_sql("""
+        WITH n AS (
+            SELECT day_type, COUNT(*) AS n_days
+            FROM daily_trips
+            GROUP BY day_type
         )
-        SELECT t.hour, t.day_type, COUNT(*) * 1.0 / d.n_days AS avg_trips
-        FROM trips_typed t
-        JOIN days d ON t.day_type = d.day_type
-        GROUP BY t.hour, t.day_type
-        ORDER BY t.hour
-    """, conn)
+        SELECT h.hour, h.day_type, SUM(h.trips) * 1.0 / n.n_days AS avg_trips
+        FROM hourly_trips h
+        JOIN n ON h.day_type = n.day_type
+        WHERE h.day_type IN (?, ?)
+        GROUP BY h.hour, h.day_type
+        ORDER BY h.hour
+    """, conn, params=("weekday", "weekend"))
+    dates = pd.read_sql("SELECT trip_date FROM daily_trips", conn, parse_dates=["trip_date"])
     wide = df.pivot(index="hour", columns="day_type", values="avg_trips")
 
     fig, ax = plt.subplots(figsize=(8, 4.5), facecolor=SURFACE)
     for col, color, label in [("weekday", BLUE, "Weekdays"), ("weekend", ORANGE, "Weekends")]:
         ax.plot(wide.index, wide[col], color=color, linewidth=2, label=label)
-        ax.text(23.3, wide[col].iloc[-1], label, color=TEXT, fontsize=10, va="center")
 
     ax.set_xticks(range(0, 24, 3))
     ax.set_xticklabels([f"{h:02d}:00" for h in range(0, 24, 3)])
@@ -124,55 +130,57 @@ def chart_hourly(conn):
     ax.set_ylim(0, None)
     ax.legend(frameon=False, loc="upper left", fontsize=10, labelcolor=TEXT)
     style(ax, "Weekday commute peaks vs weekend afternoons",
-          "Average trips per hour of departure, June 2025 (Midsummer excluded)")
+          f"Average trips per hour of departure, {period_label(dates['trip_date'])} "
+          "(holidays excluded)")
     save(fig, "hourly.png")
 
 
 def chart_daily(conn):
-    """Q5: trips per day, rainy days highlighted, 7-day moving average."""
+    """Trips per day, rainy days highlighted, 7-day moving average, holidays shaded."""
     df = pd.read_sql("""
-        WITH daily AS (
-            SELECT trip_date, COUNT(*) AS trips
-            FROM trips
-            GROUP BY trip_date
-        )
         SELECT
-            d.trip_date,
-            d.trips,
-            w.is_rainy,
+            trip_date,
+            trips,
+            is_rainy,
+            day_type,
             CASE WHEN COUNT(*) OVER last7 = 7
-                 THEN AVG(d.trips) OVER last7 END AS avg_7d
-        FROM daily d
-        JOIN weather w ON d.trip_date = w.date
-        WINDOW last7 AS (ORDER BY d.trip_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)
-        ORDER BY d.trip_date
-    """, conn)
-    df["trip_date"] = pd.to_datetime(df["trip_date"])
-    colors = [BLUE if r else GRAY for r in df["is_rainy"]]
+                 THEN AVG(trips) OVER last7 END AS avg_7d
+        FROM daily_trips
+        WINDOW last7 AS (ORDER BY trip_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW)
+        ORDER BY trip_date
+    """, conn, parse_dates=["trip_date"])
+    holidays = pd.read_sql(
+        "SELECT date, name FROM holidays WHERE date BETWEEN ? AND ?",
+        conn, params=(f"{df['trip_date'].min():%Y-%m-%d}", f"{df['trip_date'].max():%Y-%m-%d}"),
+        parse_dates=["date"],
+    )
+    top = df["trips"].max()
+    half_day = pd.Timedelta(hours=12)
 
     fig, ax = plt.subplots(figsize=(10, 4.5), facecolor=SURFACE)
-    ax.axvspan(pd.Timestamp(HOLIDAY_START) - pd.Timedelta(hours=12),
-               pd.Timestamp(HOLIDAY_END) + pd.Timedelta(hours=12),
-               color="#f0efec", zorder=0)
-    ax.text(pd.Timestamp("2025-06-21"), df["trips"].max() * 1.07, "Midsummer",
-            ha="center", fontsize=9, color=TEXT_2)
+    for day in holidays["date"]:
+        ax.axvspan(day - half_day, day + half_day, color=HOLIDAY_BG, linewidth=0, zorder=0)
+    for name, group in holidays.groupby("name"):
+        ax.text(group["date"].mean(), top * 1.07, name, ha="center", fontsize=9, color=TEXT_2)
+
+    colors = [BLUE if rainy else GRAY for rainy in df["is_rainy"]]
     ax.bar(df["trip_date"], df["trips"], color=colors, width=0.8, zorder=2)
     ax.plot(df["trip_date"], df["avg_7d"], color=ORANGE, linewidth=2, zorder=3)
 
     ax.set_xlim(df["trip_date"].min() - pd.Timedelta(hours=14),
                 df["trip_date"].max() + pd.Timedelta(hours=14))
     ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=[1, 8, 15, 22, 29]))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%-d Jun"))
-    ax.set_ylim(0, df["trips"].max() * 1.15)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%-d %b"))
+    ax.set_ylim(0, top * 1.15)
     ax.legend(
         handles=[Patch(color=GRAY, label="Dry day"),
-                 Patch(color=BLUE, label="Rainy day (≥ 1 mm)"),
+                 Patch(color=BLUE, label=f"Rainy day (≥ {RAIN_THRESHOLD_MM:g} mm)"),
                  Line2D([0], [0], color=ORANGE, linewidth=2, label="7-day average")],
         frameon=False, loc="upper right", ncol=3, fontsize=10, labelcolor=TEXT,
         bbox_to_anchor=(1, 1.12),
     )
-    style(ax, "Rainy days and Midsummer pull the weekly average down",
-          "Trips per day, June 2025")
+    style(ax, "Rainy days and holidays pull the weekly average down",
+          f"Trips per day, {period_label(df['trip_date'])}")
     save(fig, "daily.png")
 
 
