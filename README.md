@@ -12,11 +12,15 @@ How does weather influence the number of city bike rides in Helsinki?
   station Helsinki Kaisaniemi, daily observations.
 
 ## Project structure
-- `pipeline.py` — extract, clean, validate and load data into SQLite
+- `pipeline.py` — extract, clean, validate and load data into SQLite;
+  creates views `daily_trips` and `hourly_trips` used by all analysis
 - `queries.sql` — analysis queries (Q0–Q5)
+- `analysis.py` — charts from the database (saved to `images/`)
 - `explore.py` — data exploration and quality checks
 - `reference/stations_manual.csv` — manual fixes for stations missing in the 2021 list
-- `analysis.py` — charts from the database (saved to `images/`)
+- `reference/holidays.csv` — holidays excluded from regular day comparisons
+
+Rain thresholds (1 mm, 5 mm) are defined once in `pipeline.py`.
 
 Tools: Python, pandas, SQLite.
 

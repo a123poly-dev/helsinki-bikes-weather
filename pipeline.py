@@ -7,6 +7,10 @@ WEATHER_FILE = "data/weather-2025-06.csv"
 STATIONS_FILE = "data/stations.csv"
 DB_FILE = "data/bikes.db"
 MANUAL_STATIONS_FILE = "reference/stations_manual.csv"
+HOLIDAYS_FILE = "reference/holidays.csv"
+
+RAIN_THRESHOLD_MM = 1.0   # rainy day: at least this much precipitation
+HEAVY_RAIN_MM = 5.0       # heavy rain: more than this
 
 
 def normalize(s):
@@ -90,14 +94,18 @@ def clean_weather(df):
     df.loc[no_rain, "precipitation_mm"] = 0
     print(f"  precipitation -1 → 0: {no_rain.sum()}")
 
-    # Rainy day: at least 1 mm
-    df["is_rainy"] = df["precipitation_mm"] >= 1
+    # Rain levels (thresholds are constants at the top of the file)
+    df["is_rainy"] = df["precipitation_mm"] >= RAIN_THRESHOLD_MM
+    df["rain_level"] = "dry"
+    df.loc[df["is_rainy"], "rain_level"] = "light"
+    df.loc[df["precipitation_mm"] > HEAVY_RAIN_MM, "rain_level"] = "heavy"
 
     # Checks: one row per day, no gaps
+    
     assert df["date"].is_unique, "Duplicate dates in weather data"
     print(f"  days: {len(df)}, rainy: {df['is_rainy'].sum()}")
 
-    return df[["date", "precipitation_mm", "temp_avg_c", "temp_max_c", "is_rainy"]]
+    return df[["date", "precipitation_mm", "temp_avg_c", "temp_max_c","is_rainy", "rain_level"]]
 
 def extract_stations(path):
     """Read stations from CSV."""
@@ -148,8 +156,45 @@ def build_stations(trips, ref, manual):
     return st.drop(columns=["id_num", "ref_id", "ref_name"])
 
 
-def load_to_sqlite(trips, weather, stations, db_path):
-    """Load all tables into SQLite. Safe to re-run."""
+VIEWS_SQL = """
+DROP VIEW IF EXISTS daily_trips;
+CREATE VIEW daily_trips AS
+SELECT
+    t.trip_date,
+    CASE strftime('%w', t.trip_date)
+        WHEN '0' THEN 'Sun' WHEN '1' THEN 'Mon' WHEN '2' THEN 'Tue'
+        WHEN '3' THEN 'Wed' WHEN '4' THEN 'Thu' WHEN '5' THEN 'Fri'
+        ELSE 'Sat'
+    END AS weekday,
+    CASE
+        WHEN h.date IS NOT NULL THEN 'holiday'
+        WHEN strftime('%w', t.trip_date) IN ('0', '6') THEN 'weekend'
+        ELSE 'weekday'
+    END AS day_type,
+    COUNT(*) AS trips,
+    w.precipitation_mm,
+    w.is_rainy,
+    w.rain_level
+FROM trips t
+JOIN weather w ON t.trip_date = w.date
+LEFT JOIN holidays h ON t.trip_date = h.date
+GROUP BY t.trip_date;
+
+DROP VIEW IF EXISTS hourly_trips;
+CREATE VIEW hourly_trips AS
+SELECT
+    t.trip_date,
+    d.day_type,
+    CAST(strftime('%H', t.departure) AS INTEGER) AS hour,
+    COUNT(*) AS trips
+FROM trips t
+JOIN daily_trips d ON t.trip_date = d.trip_date
+GROUP BY t.trip_date, hour;
+"""
+
+
+def load_to_sqlite(trips, weather, stations, holidays, db_path):
+    """Load all tables and create analysis views. Safe to re-run."""
     trips = trips.rename(columns={
         "Departure": "departure",
         "Return": "return_time",
@@ -166,8 +211,10 @@ def load_to_sqlite(trips, weather, stations, db_path):
     trips.to_sql("trips", conn, if_exists="replace", index=False)
     stations.to_sql("stations", conn, if_exists="replace", index=False)
     weather.to_sql("weather", conn, if_exists="replace", index=False)
+    holidays.to_sql("holidays", conn, if_exists="replace", index=False)
+    conn.executescript(VIEWS_SQL)
 
-    for table in ["trips", "stations", "weather"]:
+    for table in ["trips", "stations", "weather", "holidays", "daily_trips"]:
         n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         print(f"  {table}: {n} rows")
     conn.close()
@@ -194,9 +241,9 @@ def main():
     stations = build_stations(trips, ref, manual)
 
     print("Load to SQLite...")
-    load_to_sqlite(trips, weather, stations, DB_FILE)
+    holidays = pd.read_csv(HOLIDAYS_FILE, dtype=str)
+    load_to_sqlite(trips, weather, stations, holidays, DB_FILE)
    
-# Next steps: load_to_sqlite()
 
 if __name__ == "__main__":
     main()
