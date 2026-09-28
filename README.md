@@ -179,4 +179,3 @@ Each dot is one weekday; the bar is the average.
   ## Possible next steps
 - Add more months to separate rain effects from seasonal trends
 - Use hourly weather data to check rain timing
-- Connect a BI tool (e.g. Power BI) to the `daily_trips` view for an interactive dashboard
