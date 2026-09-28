@@ -16,6 +16,7 @@ How does weather influence the number of city bike rides in Helsinki?
 - `queries.sql` — analysis queries (Q0–Q5)
 - `explore.py` — data exploration and quality checks
 - `reference/stations_manual.csv` — manual fixes for stations missing in the 2021 list
+- `analysis.py` — charts from the database (saved to `images/`)
 
 Tools: Python, pandas, SQLite.
 
@@ -28,6 +29,7 @@ python pipeline.py
 sqlite3 data/bikes.db < queries.sql
 ```
 Output: `data/bikes.db` with tables `trips`, `stations`, `weather`.
+python analysis.py
 
 ## Data exploration
 
@@ -108,6 +110,8 @@ Rows below are kept, not removed:
 
 ### Weekdays by rain intensity
 
+![Weekday trips by rain intensity](images/rain_intensity.png)
+
 | Rain            | Days | Trips/day | Effect |
 |-----------------|------|-----------|--------|
 | Dry (< 1 mm)    | 9    | 15,806    | —      |
@@ -120,6 +124,8 @@ Rows below are kept, not removed:
   matters (e.g. night rain). Hourly weather data would be needed to check this.
 
 ### Trips per hour (average per day, Midsummer excluded)
+
+![Trips per hour: weekdays vs weekends](images/hourly.png)
 
 - Weekdays: two commute peaks — 8:00 (~930 trips) and 16–17 (~1,320).
   The evening peak is 1.4× higher than the morning one.
@@ -139,6 +145,8 @@ Rows below are kept, not removed:
   University metro station (2,983), followed by Otaniemi and Leppävaara.
 
 ### 7-day moving average
+
+![Trips per day with 7-day average](images/daily.png)
 
 - Two dips in June: after heavy rain (11–13 June, ~12,100 trips/day) and
   during Midsummer with rain (23–25 June, ~9,000).
