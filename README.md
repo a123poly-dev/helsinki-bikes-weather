@@ -26,16 +26,30 @@ Rain thresholds (1 mm, 5 mm) are defined once in `pipeline.py`.
 Tools: Python, pandas, SQLite.
 
 ## How to run
+Tested with Python 3.14 (pandas 3 requires Python 3.11+).
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python pipeline.py
 sqlite3 data/bikes.db < queries.sql
 ```
 Output: `data/bikes.db` with tables `trips`, `stations`, `weather`.
 python analysis.py
 python -m pytest
+
+## Get the data
+
+Data files are not stored in the repository. Download them into `data/`
+with these exact names:
+
+| File | Source | Settings |
+|------|--------|----------|
+| `data/2025-06.csv` | [HSL city bike OD data](https://hri.fi/data/en_GB/dataset/helsingin-ja-espoon-kaupunkipyorilla-ajatut-matkat) | June 2025 |
+| `data/stations.csv` | [HSL city bike stations](https://hri.fi/data/en/dataset/hsl-n-kaupunkipyoraasemat) | CSV file |
+| `data/weather-2025-06.csv` | [FMI download observations](https://en.ilmatieteenlaitos.fi/download-observations) | Helsinki Kaisaniemi, daily, 1.6.–30.6.2025: precipitation amount, average and maximum temperature, CSV |
+
+`reference/` (manual station fixes, holidays) is part of the repository.
 
 ## Data exploration
 
