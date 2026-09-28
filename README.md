@@ -174,3 +174,9 @@ Each dot is one weekday; the bar is the average.
 - By the end of June the average did not return to the early-June level
   (~12,500 vs ~14,000): rain on 27–29 June or the start of summer holidays.
   One month of data is not enough to separate these effects.
+
+
+  ## Possible next steps
+- Add more months to separate rain effects from seasonal trends
+- Use hourly weather data to check rain timing
+- Connect a BI tool (e.g. Power BI) to the `daily_trips` view for an interactive dashboard
